@@ -58,6 +58,9 @@ typings/
 # Yarn Integrity file
 .yarn-integrity
 
+# Webstorm bullshit
+.idea
+
 # dotenv environment variables file
 .env
 .env.test
