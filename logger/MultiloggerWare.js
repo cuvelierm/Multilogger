@@ -1,18 +1,18 @@
+
 const multilogger = {
-  multilog: async (req, res, next, err) => {
+  multilog: (req, res, next) => {
+      console.log('\n=====- Multilogger v0.1 -=====');
+      console.log('--- Basic ---\n');
 
+      res.on('finish', () => {
+          console.info(`${req.method} --- ${res.statusCode} ---  ${res.statusMessage}  at ${new Date().toLocaleString()}`);
+          console.info(`Response-time: ${res.getHeader('X-Response-Time')}`);
+          console.info(`URL: ${req.hostname} --- ${req.url}`);
+          console.info(`Client: ${req.ip} --- ${req.header('User-Agent')}`);
+      });
 
-      if (err) {
-          console.log(err.stack);
-      }
-
-      console.log(`Logged ${req.url}  ${req.method} -- ${new Date()}`);
       next();
   },
-
-    // basic: async (res, req, next) => {
-    //
-    // },
 };
 
 module.exports = multilogger;
