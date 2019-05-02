@@ -14,9 +14,9 @@ app.use(responseTime());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
+app.use(cookieParser());
 // app.use(logger('dev'));
 app.use(multilogger.multilog);
-app.use(cookieParser());
 
 app.use('/', indexRouter);
 
