@@ -1,22 +1,61 @@
-const os = require("os");
-
-const multilogger = {
-  multilog: (req, res, next) => {
-    console.log("\n=====- Multilogger v0.1 -=====");
-    const startMeasures = cpuAverage();
+module.exports = function({
+  extended = false,
+  development = false,
+  database = false,
+  interval = 5000
+}) {
+  return function(req, res, next) {
+    const startTime = process.hrtime();
+    const startUsage = process.cpuUsage();
 
     res.on("finish", () => {
-      getBasic(req, res);
-      getParameters(req);
-      getAuth(req);
-      getPerformance(startMeasures);
+      if (extended) {
+        getBasic(req, res);
+        getParameters(req);
+        getAuth(req);
+        getPerformance(startTime, startUsage);
+      } else {
+        req.body.multiLogObject = {
+          method: req.method,
+          statusCode: res.statusCode,
+          statusMessage: res.statusMessage,
+          date: new Date().toLocaleString(),
+          responseTime: res.getHeader("X-Response-Time"),
+          contentType: req.header("Content-Type"),
+          hostname: req.hostname,
+          url: req.url,
+          body: JSON.stringify(req.body),
+          params: JSON.stringify(req.params),
+          query: JSON.stringify(req.query),
+          cookies: JSON.stringify(req.cookies),
+          auth: req.header("Authorization"),
+          ip: req.ip,
+          clientInfo: req.header("User-Agent"),
+          memoryUsageMb: `${(
+            process.memoryUsage().heapUsed /
+            1024 /
+            1024
+          ).toFixed(2)}`,
+          memoryUsagePercentage: `${(
+            process.memoryUsage().heapUsed /
+            process.memoryUsage().heapTotal *
+            100
+          ).toFixed(2)}`,
+          cpuUsage: getCpuInfo(startTime, startUsage)
+        };
+        setInterval(() => {
+          if (development) {
+            console.log(req.body.multiLogObject);
+          }
+        }, interval);
+      }
     });
-
     next();
-  }
+  };
 };
 
 function getBasic(req, res) {
+  console.log("\n=====- Multilogger v0.1 -=====");
   console.log("--- Basic ---\n");
   console.info(
     `${req.method} ––– ${res.statusCode} –––  ${
@@ -32,17 +71,17 @@ function getBasic(req, res) {
 
 function getParameters(req) {
   console.log("\n--- Parameters ---\n");
-  if (Object.keys(req.body).length !== 0) {
+  if (req.body && Object.keys(req.body).length !== 0) {
     console.info(`Request body: ${req.body}`);
   } else {
     console.info(`Request body: Body was empty`);
   }
-  if (Object.keys(req.params && req.params).length !== 0) {
+  if (req.params && Object.keys(req.params).length !== 0) {
     console.info(`Parameters: ${JSON.stringify(req.params)}`);
   } else {
     console.info("Parameters: No parameters given");
   }
-  if (Object.keys(req.query && req.query).length !== 0) {
+  if (req.query && Object.keys(req.query).length !== 0) {
     console.info(`Query: ${JSON.stringify(req.query)}`);
   } else {
     console.info("Query: No query given ❓");
@@ -64,7 +103,14 @@ function getAuth(req) {
   );
 }
 
-function getPerformance(startMeasures) {
+function getCpuInfo(startTime, startUsage) {
+  const elapTime = process.hrtime(startTime);
+  const elapUsage = process.cpuUsage(startUsage);
+
+  return (100 * (elapUsage.user + elapUsage.system) / elapTime[1]).toFixed(2);
+}
+
+function getPerformance(startTime, startUsage) {
   console.log("\n--- Performance ---\n");
   console.info(
     `Memory usage of Node heap: ${process.memoryUsage().heapUsed} bytes || ${(
@@ -81,38 +127,7 @@ function getPerformance(startMeasures) {
       100
     ).toFixed(2)}%)`
   );
-  setTimeout(() => {
-    const endMeasures = cpuAverage();
-    const percentageCPU = endMeasures.map((end, i) => {
-      return (
-        (
-          (end.tick - startMeasures[i].tick) /
-          (end.idle - startMeasures[i].idle) *
-          100
-        ).toFixed(2) + "%"
-      );
-    });
+  const percentageCPU = getCpuInfo(startTime, startUsage);
 
-    console.log(`CPU Usage: ${percentageCPU.join(" ")}%`);
-  }, 300);
+  console.log(`CPU Usage: ${percentageCPU}%`);
 }
-
-// https://gist.github.com/bag-man/5570809
-function cpuAverage() {
-  const cpus = os.cpus();
-
-  return cpus.map(cpu => {
-    const times = cpu.times;
-    return {
-      tick: Object.keys(times)
-        .filter(time => time !== "idle")
-        .reduce((tick, time) => {
-          tick += times[time];
-          return tick;
-        }, 0),
-      idle: times.idle
-    };
-  });
-}
-
-module.exports = multilogger;
