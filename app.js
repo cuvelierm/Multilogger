@@ -5,6 +5,7 @@ const responseTime = require('response-time');
 const cookieParser = require('cookie-parser');
 const logger = require('morgan');
 const multilogger = require('./logger/MultiloggerWare');
+const multiError = require('./logger/MultiwareError');
 
 const indexRouter = require('./routes/index');
 
@@ -15,8 +16,8 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(cookieParser());
-// app.use(logger('dev'));
-app.use(multilogger({extended: false, development: false, interval: 5000}));
+app.use(multilogger({extended: false, development: true, interval: 5000}));
+app.use(multiError);
 
 app.use('/', indexRouter);
 

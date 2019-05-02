@@ -15,38 +15,40 @@ module.exports = function({
         getAuth(req);
         getPerformance(startTime, startUsage);
       } else {
-        req.body.multiLogObject = {
-          method: req.method,
-          statusCode: res.statusCode,
-          statusMessage: res.statusMessage,
-          date: new Date().toLocaleString(),
-          responseTime: res.getHeader("X-Response-Time"),
-          contentType: req.header("Content-Type"),
-          hostname: req.hostname,
-          url: req.url,
-          body: JSON.stringify(req.body),
-          params: JSON.stringify(req.params),
-          query: JSON.stringify(req.query),
-          cookies: JSON.stringify(req.cookies),
-          auth: req.header("Authorization"),
-          ip: req.ip,
-          clientInfo: req.header("User-Agent"),
-          memoryUsageMb: `${(
-            process.memoryUsage().heapUsed /
-            1024 /
-            1024
-          ).toFixed(2)}`,
-          memoryUsagePercentage: `${(
-            process.memoryUsage().heapUsed /
-            process.memoryUsage().heapTotal *
-            100
-          ).toFixed(2)}`,
-          cpuUsage: getCpuInfo(startTime, startUsage)
-        };
         setInterval(() => {
+          req.body.multiLogObject = {
+            method: req.method,
+            statusCode: res.statusCode,
+            statusMessage: res.statusMessage,
+            date: new Date().toLocaleString(),
+            responseTime: res.getHeader("X-Response-Time"),
+            contentType: req.header("Content-Type"),
+            hostname: req.hostname,
+            url: req.url,
+            body: req.method === 'POST' ? req.body : {},
+            params: JSON.stringify(req.params),
+            query: JSON.stringify(req.query),
+            cookies: JSON.stringify(req.cookies),
+            auth: req.header("Authorization"),
+            ip: req.ip,
+            clientInfo: req.header("User-Agent"),
+            memoryUsageMb: `${(
+              process.memoryUsage().heapUsed /
+              1024 /
+              1024
+            ).toFixed(2)}`,
+            memoryUsagePercentage: `${(
+              process.memoryUsage().heapUsed /
+              process.memoryUsage().heapTotal *
+              100
+            ).toFixed(2)}`,
+            cpuUsage: getCpuInfo(startTime, startUsage)
+          };
+
           if (development) {
             console.log(req.body.multiLogObject);
           }
+          next();
         }, interval);
       }
     });
