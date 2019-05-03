@@ -8,6 +8,8 @@ module.exports = function({
     const startTime = process.hrtime();
     const startUsage = process.cpuUsage();
 
+    const realBody = req.body || {};
+
     res.on("finish", () => {
       if (extended) {
         getBasic(req, res);
@@ -15,41 +17,42 @@ module.exports = function({
         getAuth(req);
         getPerformance(startTime, startUsage);
       } else {
-        setInterval(() => {
-          req.body.multiLogObject = {
-            method: req.method,
-            statusCode: res.statusCode,
-            statusMessage: res.statusMessage,
-            date: new Date().toLocaleString(),
-            responseTime: res.getHeader("X-Response-Time"),
-            contentType: req.header("Content-Type"),
-            hostname: req.hostname,
-            url: req.url,
-            body: req.method === 'POST' ? req.body : {},
-            params: JSON.stringify(req.params),
-            query: JSON.stringify(req.query),
-            cookies: JSON.stringify(req.cookies),
-            auth: req.header("Authorization"),
-            ip: req.ip,
-            clientInfo: req.header("User-Agent"),
-            memoryUsageMb: `${(
-              process.memoryUsage().heapUsed /
-              1024 /
-              1024
-            ).toFixed(2)}`,
-            memoryUsagePercentage: `${(
-              process.memoryUsage().heapUsed /
-              process.memoryUsage().heapTotal *
-              100
-            ).toFixed(2)}`,
-            cpuUsage: getCpuInfo(startTime, startUsage)
-          };
+        res.locals.multiLogObject = {
+          method: req.method,
+          statusCode: res.statusCode,
+          statusMessage: res.statusMessage,
+          date: new Date().toLocaleString(),
+          responseTime: res.getHeader("X-Response-Time"),
+          contentType: req.header("Content-Type"),
+          hostname: req.hostname,
+          url: req.url,
+          body: req.method === "POST" ? realBody : {},
+          params: JSON.stringify(req.params),
+          query: JSON.stringify(req.query),
+          cookies: JSON.stringify(req.cookies),
+          auth: req.header("Authorization"),
+          ip: req.ip,
+          clientInfo: req.header("User-Agent"),
+          memoryUsageMb: `${(
+            process.memoryUsage().heapUsed /
+            1024 /
+            1024
+          ).toFixed(2)}`,
+          memoryUsagePercentage: `${(
+            process.memoryUsage().heapUsed /
+            process.memoryUsage().heapTotal *
+            100
+          ).toFixed(2)}`,
+          cpuUsage: getCpuInfo(startTime, startUsage),
+          errorMessage: res.locals.multiError || {}
+        };
 
-          if (development) {
-            console.log(req.body.multiLogObject);
-          }
-          next();
-        }, interval);
+        if (development) {
+          console.log(res.locals.multiLogObject);
+        }
+        req.app.locals.logObjects.push(res.locals.multiLogObject);
+        buffer(req.app.locals.logObjects, interval);
+        next();
       }
     });
     next();
@@ -88,7 +91,6 @@ function getParameters(req) {
   } else {
     console.info("Query: No query given ❓");
   }
-
   console.info(
     `Cookies & Storage: ${JSON.stringify(req.cookies) || "No tasty cookies 🍪"}`
   );
@@ -130,6 +132,11 @@ function getPerformance(startTime, startUsage) {
     ).toFixed(2)}%)`
   );
   const percentageCPU = getCpuInfo(startTime, startUsage);
-
   console.log(`CPU Usage: ${percentageCPU}%`);
+}
+
+function buffer(logObject, interval) {
+  setInterval(() => {
+    console.log(logObject.length || "0");
+  }, interval);
 }

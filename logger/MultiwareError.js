@@ -1,5 +1,10 @@
-module.exports = function (err, req, res, next) {
-    console.error(err.message);
-    console.error(req.body);
-    next(err);
+module.exports = function(err, req, res, next) {
+  if (!err) {
+    return next();
+  }
+  res.locals.multiError = {
+    errorMessage: err.message,
+    errorStack: err.stack
+  };
+  next();
 };
