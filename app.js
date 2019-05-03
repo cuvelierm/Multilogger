@@ -10,6 +10,12 @@ const indexRouter = require("./routes/index");
 const app = express();
 app.locals.logObjects = [];
 
+const buffer = function () {
+    setInterval(() => {
+        console.log(app.locals.logObjects.length || "0");
+    }, 5000);
+}();
+
 app.use(responseTime());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));

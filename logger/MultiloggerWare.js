@@ -51,7 +51,6 @@ module.exports = function({
           console.log(res.locals.multiLogObject);
         }
         req.app.locals.logObjects.push(res.locals.multiLogObject);
-        buffer(req.app.locals.logObjects, interval);
         next();
       }
     });
@@ -133,10 +132,4 @@ function getPerformance(startTime, startUsage) {
   );
   const percentageCPU = getCpuInfo(startTime, startUsage);
   console.log(`CPU Usage: ${percentageCPU}%`);
-}
-
-function buffer(logObject, interval) {
-  setInterval(() => {
-    console.log(logObject.length || "0");
-  }, interval);
 }

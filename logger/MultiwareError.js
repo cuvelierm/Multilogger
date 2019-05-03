@@ -6,5 +6,6 @@ module.exports = function(err, req, res, next) {
     errorMessage: err.message,
     errorStack: err.stack
   };
+
   next();
 };
