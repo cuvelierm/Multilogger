@@ -1,15 +1,19 @@
-const os = require("os");
+const si = require("systeminformation");
 let data = [];
 
 module.exports = {
   init: ({ interval = 5000, database = {} }) => {
-    init(interval, database);
+    return init(interval, database);
   },
   log: ({ extended = false, development = false }) => {
     return log(extended, development);
+  },
+  error: () => {
+    return throwMultilogError();
   }
 };
 
+//  Initialize the middleware, start an interval to write de buffer data to a database of choice
 const init = (interval, database) => {
   // const { server, name, password, port } = database;
   setInterval(() => {
@@ -17,63 +21,59 @@ const init = (interval, database) => {
   }, interval);
 };
 
+//  Writes the buffer to the database
 const writeToDatabase = () => {
   console.log(data.length || "0");
   console.log("write to database");
 };
 
+// Creates a log object
 const log = (extended, development) => {
-  return function(req, res, next) {
+  return async (req, res, next) => {
+    const startHrTime = process.hrtime();
     const realBody = req.body || {};
+    const cpuUsage = await getCpuInfo();
+    const memoryUsage = await getMemInfo();
 
-    res.on("finish", () => {
+    res.on("finish", async () => {
+      const elapsedHrTime = process.hrtime(startHrTime);
+      const elapsedTimeInMs = elapsedHrTime[0] * 1000 + elapsedHrTime[1] / 1e6;
       if (extended) {
         getBasic(req, res);
         getParameters(req);
         getAuth(req);
-        // getPerformance(startTime, startUsage);
-      } else {
-        const object = {
-          method: req.method,
-          statusCode: res.statusCode,
-          statusMessage: res.statusMessage,
-          date: new Date().toLocaleString(),
-          responseTime: res.getHeader("X-Response-Time"),
-          contentType: req.header("Content-Type"),
-          hostname: req.hostname,
-          url: req.url,
-          body: req.method === "POST" ? realBody : {},
-          params: JSON.stringify(req.params),
-          query: JSON.stringify(req.query),
-          cookies: JSON.stringify(req.cookies),
-          auth: req.header("Authorization"),
-          ip: req.ip,
-          clientInfo: req.header("User-Agent"),
-          memoryUsageMb: `${(
-            process.memoryUsage().heapUsed /
-            1024 /
-            1024
-          ).toFixed(2)}`,
-          memoryUsagePercentage: `${(
-            process.memoryUsage().heapUsed /
-            process.memoryUsage().heapTotal *
-            100
-          ).toFixed(2)}`,
-          // cpuUsage: getCpuInfo(startTime, startUsage),
-          errorMessage: res.locals.multiError || {}
-        };
-
-        if (development) {
-          console.log(object);
-        }
-        data.push(object);
-        next();
+        getPerformance(cpuUsage, memoryUsage);
       }
+      const object = {
+        method: req.method,
+        statusCode: res.statusCode,
+        statusMessage: res.statusMessage,
+        date: new Date().toUTCString(),
+        responseTime: elapsedTimeInMs,
+        contentType: req.header("Content-Type"),
+        hostname: req.hostname,
+        url: req.url,
+        body: req.method === "POST" ? realBody : {},
+        params: JSON.stringify(req.params),
+        query: JSON.stringify(req.query),
+        cookies: JSON.stringify(req.cookies),
+        auth: req.header("Authorization"),
+        ip: req.ip,
+        clientInfo: req.header("User-Agent"),
+        memoryUsage,
+        cpuUsage,
+        errorMessage: res.locals.multiError || {}
+      };
+      if (development) {
+        console.log(object);
+      }
+      data.push(object);
     });
     next();
   };
 };
 
+// FANCY LOGS
 const getBasic = (req, res) => {
   console.log("\n=====- Multilogger v0.1 -=====");
   console.log("--- Basic ---\n");
@@ -89,7 +89,7 @@ const getBasic = (req, res) => {
   console.info(`Hostname & URL: ${req.hostname} ––– ${req.url}`);
 };
 
-function getParameters(req) {
+const getParameters = req => {
   console.log("\n--- Parameters ---\n");
   if (req.body && Object.keys(req.body).length !== 0) {
     console.info(`Request body: ${req.body}`);
@@ -109,9 +109,9 @@ function getParameters(req) {
   console.info(
     `Cookies & Storage: ${JSON.stringify(req.cookies) || "No tasty cookies 🍪"}`
   );
-}
+};
 
-function getAuth(req) {
+const getAuth = req => {
   console.log("\n--- Authorization ---\n");
   console.info(
     `Authorization: ${req.header("Authorization") ||
@@ -120,32 +120,40 @@ function getAuth(req) {
   console.info(
     `Client: ${req.ip || "No IP found"} ––– ${req.header("User-Agent")}`
   );
-}
+};
 
-function getCpuInfo(startTime, startUsage) {
-  const elapTime = process.hrtime(startTime);
-  const elapUsage = process.cpuUsage(startUsage);
-
-  return (100 * (elapUsage.user + elapUsage.system) / elapTime[1]).toFixed(2);
-}
-
-function getPerformance(startTime, startUsage) {
+const getPerformance = (cpuInfo, memoryInfo) => {
   console.log("\n--- Performance ---\n");
-  console.info(
-    `Memory usage of Node heap: ${process.memoryUsage().heapUsed} bytes || ${(
-      process.memoryUsage().heapUsed /
-      1024 /
-      1024
-    ).toFixed(2)}MB USED out of ${process.memoryUsage().heapTotal} bytes || ${(
-      process.memoryUsage().heapTotal /
-      1024 /
-      1024
-    ).toFixed(2)}MB ––– (${(
-      process.memoryUsage().heapUsed /
-      process.memoryUsage().heapTotal *
-      100
-    ).toFixed(2)}%)`
-  );
-  const percentageCPU = getCpuInfo(startTime, startUsage);
-  console.log(`CPU Usage: ${percentageCPU}%`);
-}
+
+  console.info(`Memory Usage: ${JSON.stringify(memoryInfo)}`);
+  console.info(`CPU Usage: ${JSON.stringify(cpuInfo)}`);
+};
+
+//  GET CPU INFO
+const getCpuInfo = () => {
+  return si.cpuCurrentspeed();
+};
+
+//  GET MEMORY INFO
+const getMemInfo = async () => {
+  const mem = await si.mem();
+  return {
+    free: mem.free,
+    used: mem.used,
+    total: mem.total
+  };
+};
+
+//  THROW A CUSTOM ERROR AND ADD IT TO THE MIDDLEWARE
+const throwMultilogError = () => {
+  return (err, req, res, next) => {
+    if (!err) {
+      return next();
+    }
+    res.locals.multiError = {
+      errorMessage: err.message,
+      errorStack: err.stack
+    };
+    next();
+  };
+};

@@ -5,15 +5,30 @@ Parse important req, res and header objects to your database of choice. Get an e
 
 ## Usage
 
-This npm package uses a dependency on response-time
+This middleware uses a dependency on systeminformation
 
 ```
-app.use(responseTime());
-app.use(bodyParser.json());
+const express = require("express");
+const bodyParser = require("body-parser");
+const cookieParser = require("cookie-parser");
+const multilogger = require("./logger/MultiloggerWare");
+
+const indexRouter = require("./routes/index");
+
+multilogger.init({ database: {}, interval: 10000 }); // Add this
+
+const app = express();
+
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use(cookieParser());
-app.use(multilogger({extended: false, development: false, interval: 5000}));
+app.use(multilogger.log({ development: true, extended: false })); // Also add this
+
+app.use("/", indexRouter);
+
+app.use(multilogger.error());
+
+module.exports = app;
 ```
 
 ### Parameters
@@ -26,6 +41,6 @@ app.use(multilogger({extended: false, development: false, interval: 5000}));
 
 ## Dependencies
 
-*   response-time
+*   systeminformation
 *   express
 *   Node.js
