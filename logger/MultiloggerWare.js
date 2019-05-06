@@ -1,13 +1,29 @@
-module.exports = function({
-  extended = false,
-  development = false,
-  database = false,
-  interval = 5000
-}) {
-  return function(req, res, next) {
-    const startTime = process.hrtime();
-    const startUsage = process.cpuUsage();
+const os = require("os");
+let data = [];
 
+module.exports = {
+  init: ({ interval = 5000, database = {} }) => {
+    init(interval, database);
+  },
+  log: ({ extended = false, development = false }) => {
+    return log(extended, development);
+  }
+};
+
+const init = (interval, database) => {
+  // const { server, name, password, port } = database;
+  setInterval(() => {
+    writeToDatabase();
+  }, interval);
+};
+
+const writeToDatabase = () => {
+  console.log(data.length || "0");
+  console.log("write to database");
+};
+
+const log = (extended, development) => {
+  return function(req, res, next) {
     const realBody = req.body || {};
 
     res.on("finish", () => {
@@ -15,9 +31,9 @@ module.exports = function({
         getBasic(req, res);
         getParameters(req);
         getAuth(req);
-        getPerformance(startTime, startUsage);
+        // getPerformance(startTime, startUsage);
       } else {
-        res.locals.multiLogObject = {
+        const object = {
           method: req.method,
           statusCode: res.statusCode,
           statusMessage: res.statusMessage,
@@ -43,14 +59,14 @@ module.exports = function({
             process.memoryUsage().heapTotal *
             100
           ).toFixed(2)}`,
-          cpuUsage: getCpuInfo(startTime, startUsage),
+          // cpuUsage: getCpuInfo(startTime, startUsage),
           errorMessage: res.locals.multiError || {}
         };
 
         if (development) {
-          console.log(res.locals.multiLogObject);
+          console.log(object);
         }
-        req.app.locals.logObjects.push(res.locals.multiLogObject);
+        data.push(object);
         next();
       }
     });
@@ -58,7 +74,7 @@ module.exports = function({
   };
 };
 
-function getBasic(req, res) {
+const getBasic = (req, res) => {
   console.log("\n=====- Multilogger v0.1 -=====");
   console.log("--- Basic ---\n");
   console.info(
@@ -71,7 +87,7 @@ function getBasic(req, res) {
     `Content Type: ${req.header("Content-Type") || "No content type given"}`
   );
   console.info(`Hostname & URL: ${req.hostname} ––– ${req.url}`);
-}
+};
 
 function getParameters(req) {
   console.log("\n--- Parameters ---\n");
