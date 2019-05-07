@@ -24,7 +24,4 @@ app.use("/", indexRouter);
 
 app.use(multilogger.error());
 
-// 404 Handler, No Route Defined Matched the Requested Route
-// app.use((req, res) => res.sendStatus(404));
-
 module.exports = app;
