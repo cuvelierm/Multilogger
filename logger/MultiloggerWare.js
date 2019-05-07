@@ -1,8 +1,19 @@
 const si = require("systeminformation");
+const Influx = require("influx");
+const os = require("os");
+const _ = require("lodash");
 let data = [];
 
 module.exports = {
-  init: ({ interval = 5000, database = {} }) => {
+  init: ({
+    interval = 5000,
+    database = {
+      server: "127.0.0.1",
+      name: "myMultilogDb",
+      password: "admin",
+      port: 3000
+    }
+  }) => {
     return init(interval, database);
   },
   log: ({ extended = false, development = false }) => {
@@ -15,23 +26,123 @@ module.exports = {
 
 //  Initialize the middleware, start an interval to write de buffer data to a database of choice
 const init = (interval, database) => {
-  // const { server, name, password, port } = database;
+  const { server, name, password, port } = database;
   setInterval(() => {
-    writeToDatabase();
+    console.log("Writing to database...");
+    writeToDatabase(server, name, password, port);
   }, interval);
 };
 
 //  Writes the buffer to the database
-const writeToDatabase = () => {
-  console.log(data.length || "0");
-  console.log("write to database");
+const writeToDatabase = async (server, name, password, port) => {
+  const influx = new Influx.InfluxDB({
+    host: server,
+    database: name,
+    port: port,
+    schema: [
+      {
+        measurement: "number_of_requests",
+        fields: {
+          requests: Influx.FieldType.INTEGER
+        },
+        tags: ["requests"]
+      },
+      {
+        measurement: "basics1",
+        fields: {
+          statusCode: Influx.FieldType.STRING,
+          method: Influx.FieldType.STRING,
+          path: Influx.FieldType.STRING,
+          responseTime: Influx.FieldType.FLOAT
+        },
+        tags: ["statusCode", "method", "path", "responseTime"]
+      },
+      {
+        measurement: "errors",
+        fields: {
+          statusCode: Influx.FieldType.STRING,
+          errorMessage: Influx.FieldType.STRING,
+          errorStack: Influx.FieldType.STRING,
+          body: Influx.FieldType.STRING
+        },
+        tags: ["statusCode", "errorMessage", "errorStack", "body"]
+      }
+    ]
+  });
+
+  influx
+    .getDatabaseNames()
+    .then(names => {
+      if (!names.includes("multilogDb")) {
+        return influx.createDatabase("multilogDb");
+      }
+    })
+    .catch(err => {
+      console.error(`Error creating Influx database!`);
+    });
+
+  await influx
+    .writePoints([
+      {
+        measurement: "number_of_requests",
+        tags: { requests: "Requests" },
+        fields: { requests: data.length }
+      }
+    ])
+    .catch(err => {
+      console.error(`Error saving data to InfluxDB! ${err.stack}`);
+    });
+
+  if (_.size(data) > 0) {
+    for (const object of data) {
+      await influx
+        .writePoints([
+          {
+            measurement: "basics1",
+            tags: {
+              statusCode: "Status Code",
+              method: "Method",
+              path: "Path",
+              responseTime: "Response Time in ms"
+            },
+            fields: {
+              statusCode: object.statusCode,
+              method: object.method,
+              path: object.path,
+              responseTime: object.responseTime
+            }
+          },
+          {
+            measurement: "errors",
+            tags: {
+              errorMessage: "Message",
+              errorStack: "Error Stack",
+              statusCode: "Status Code",
+              body: "Body"
+            },
+            fields: {
+              statusCode: object.statusCode,
+              errorMessage: object.errorMessage.errorMessage,
+              errorStack: object.errorMessage.errorStack,
+              body: object.body
+            }
+          }
+        ])
+        .catch(err => {
+          console.error(err.message);
+        });
+    }
+  }
+
+  data = [];
+  console.log("Writing Done");
 };
 
 // Creates a log object
 const log = (extended, development) => {
   return async (req, res, next) => {
     const startHrTime = process.hrtime();
-    const realBody = req.body || {};
+    const realBody = JSON.stringify(req.body) || {};
     const cpuUsage = await getCpuInfo();
     const memoryUsage = await getMemInfo();
 
@@ -53,6 +164,7 @@ const log = (extended, development) => {
         contentType: req.header("Content-Type"),
         hostname: req.hostname,
         url: req.url,
+        path: res.statusCode !== 404 ? req.route.path : 404,
         body: req.method === "POST" ? realBody : {},
         params: JSON.stringify(req.params),
         query: JSON.stringify(req.query),
@@ -60,8 +172,8 @@ const log = (extended, development) => {
         auth: req.header("Authorization"),
         ip: req.ip,
         clientInfo: req.header("User-Agent"),
-        memoryUsage,
-        cpuUsage,
+        memoryUsage: JSON.stringify(memoryUsage),
+        cpuUsage: JSON.stringify(cpuUsage),
         errorMessage: res.locals.multiError || {}
       };
       if (development) {
@@ -86,7 +198,8 @@ const getBasic = (req, res) => {
   console.info(
     `Content Type: ${req.header("Content-Type") || "No content type given"}`
   );
-  console.info(`Hostname & URL: ${req.hostname} ––– ${req.url}`);
+  console.info(`Hostname: ${req.hostname}`);
+  console.info(`Path & URL: ${req.route.path} ––– ${req.url}`);
 };
 
 const getParameters = req => {
